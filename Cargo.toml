@@ -1,0 +1,23 @@
+[package]
+name = "qpac"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "1.0.64"
+color-eyre = { version = "0.6.3", features = ["url", "issue-url"] }
+
+tracing = { version = "0.1.40", features = ["log"] }
+tracing-error = "0.2.0"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
+
+clap = { version = "4.5.18", features = ["cargo", "derive", "env"] }
+
+tokio = { version = "1.40.0", features = ["full"] }
+futures = "0.3.30"
+debounced = "0.2.0"
+
+serde = { version = "1.0.210", features = ["derive"] }
+tokio-stream = { version = "0.1.16", features = ["full"] }
+axum = "0.7.7"
+tower-http = { version = "0.6.1", features = ["compression-full", "trace"] }
