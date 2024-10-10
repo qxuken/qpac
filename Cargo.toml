@@ -21,3 +21,6 @@ serde = { version = "1.0.210", features = ["derive"] }
 tokio-stream = { version = "0.1.16", features = ["full"] }
 axum = "0.7.7"
 tower-http = { version = "0.6.1", features = ["compression-full", "trace"] }
+serde_json = "1.0.128"
+argon2 = { version = "0.5.3", features = ["password-hash"] }
+ring = "0.17.8"

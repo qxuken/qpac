@@ -21,7 +21,14 @@ pub enum Command {
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8080)
         )]
         bind: SocketAddr,
+
+        /// Argon2 PHC or string token for auth puproses
+        #[arg(short, long, env = "QPAC_TOKEN")]
+        token: String,
     },
+
+    /// Generate Argon2 PHC token
+    Hash { token: String },
 
     /// Test connection to server
     Add,
