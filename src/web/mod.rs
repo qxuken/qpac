@@ -1,9 +1,17 @@
 use std::{fmt::Debug, net::SocketAddr, sync::Arc, time::Duration};
 
-use axum::{extract::State, http::StatusCode, routing::get, Router};
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{get, post},
+    Json, Router,
+};
 use debounced::debounced;
+use serde::Deserialize;
+use serde_json::json;
 use tokio::sync::{
-    mpsc::{self, Receiver},
+    mpsc::{self, Receiver, Sender},
     Mutex,
 };
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
@@ -11,7 +19,7 @@ use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use tracing::Level;
 
 use crate::{
-    error::Result,
+    error::{AppError, Result},
     pac::Pac,
     storage::{memory_storage::MemoryStorage, Storage},
     trace_layer,
@@ -24,13 +32,15 @@ where
 {
     pac: Arc<Mutex<Pac>>,
     storage: Arc<Mutex<S>>,
+    update_tx: Sender<()>,
 }
 
 impl<S: Storage + Debug> ServerState<S> {
-    fn new(pac: Pac, storage: S) -> Self {
+    fn new(pac: Pac, storage: S, update_tx: Sender<()>) -> Self {
         Self {
             pac: Arc::new(Mutex::new(pac)),
             storage: Arc::new(Mutex::new(storage)),
+            update_tx,
         }
     }
 }
@@ -38,11 +48,11 @@ impl<S: Storage + Debug> ServerState<S> {
 pub async fn run_web_server(bind: SocketAddr) -> Result<()> {
     tracing::debug!("Starting web server");
 
-    let (_update_tx, rx) = mpsc::channel(1);
+    let (update_tx, rx) = mpsc::channel(1);
 
     let storage = MemoryStorage::default();
     let pac = Pac::new(storage.all_hosts()?);
-    let server_state = Arc::new(ServerState::new(pac, storage));
+    let server_state = Arc::new(ServerState::new(pac, storage, update_tx));
 
     tokio::spawn(subscribe_pac(
         server_state.storage.clone(),
@@ -57,7 +67,10 @@ pub async fn run_web_server(bind: SocketAddr) -> Result<()> {
     let compression = CompressionLayer::new();
 
     let app = Router::new()
-        .route("/", get(get_list))
+        .route("/", get(get_pac))
+        .route("/list", get(get_list))
+        .route("/add", post(add_to_list))
+        .route("/remove", post(remove_from_list))
         .fallback(fallback)
         .with_state(server_state)
         .layer(compression)
@@ -73,8 +86,48 @@ pub async fn run_web_server(bind: SocketAddr) -> Result<()> {
 }
 
 #[tracing::instrument(skip_all, ret(level = Level::TRACE))]
-async fn get_list(server_state: State<Arc<ServerState<impl Storage>>>) -> String {
+async fn get_pac(server_state: State<Arc<ServerState<impl Storage>>>) -> impl IntoResponse {
     server_state.pac.lock().await.get_file()
+}
+
+#[tracing::instrument(skip_all, ret(level = Level::TRACE))]
+async fn get_list(
+    server_state: State<Arc<ServerState<impl Storage>>>,
+) -> Result<impl IntoResponse, AppError> {
+    server_state.storage.lock().await.all_hosts().map(Json)
+}
+
+#[derive(Debug, Deserialize)]
+struct HostProps {
+    host: String,
+}
+
+#[tracing::instrument(skip(server_state), ret(level = Level::TRACE))]
+async fn add_to_list(
+    server_state: State<Arc<ServerState<impl Storage>>>,
+    Json(props): Json<HostProps>,
+) -> Result<impl IntoResponse, AppError> {
+    server_state.storage.lock().await.add_host(props.host)?;
+    server_state
+        .update_tx
+        .send(())
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))?;
+    Ok(Json(json!({ "success": true })))
+}
+
+#[tracing::instrument(skip(server_state), ret(level = Level::TRACE))]
+async fn remove_from_list(
+    server_state: State<Arc<ServerState<impl Storage>>>,
+    Json(props): Json<HostProps>,
+) -> Result<impl IntoResponse, AppError> {
+    server_state.storage.lock().await.remove_host(props.host)?;
+    server_state
+        .update_tx
+        .send(())
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))?;
+    Ok(Json(json!({ "success": true })))
 }
 
 #[tracing::instrument]
