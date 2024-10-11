@@ -1,0 +1,5 @@
+CREATE TABLE conf (
+	key TEXT NOT NULL,
+	value TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conf_key ON conf(key);

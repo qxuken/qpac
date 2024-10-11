@@ -74,3 +74,12 @@ impl From<Box<dyn Error + Send + Sync>> for AppError {
         Self::Other(value.to_string())
     }
 }
+
+impl From<sqlx::Error> for AppError {
+    fn from(value: sqlx::Error) -> Self {
+        match value {
+            sqlx::Error::RowNotFound => Self::NotFound,
+            v => Self::Other(v.to_string()),
+        }
+    }
+}

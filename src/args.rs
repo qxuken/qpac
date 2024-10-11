@@ -25,6 +25,13 @@ pub enum Command {
         /// Argon2 PHC or string token for auth puproses
         #[arg(short, long, env = "QPAC_TOKEN")]
         token: Option<String>,
+
+        /// Sqlite connection string
+        /// example:
+        ///     sqlite://data/qpac.db
+        ///     sqlite::memory:
+        #[arg(short, long, env = "QPAC_DATABASE")]
+        database: Option<String>,
     },
 
     /// Generate Argon2 PHC token

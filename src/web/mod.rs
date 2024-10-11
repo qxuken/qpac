@@ -18,7 +18,7 @@ use tracing::{debug, error, info, span, trace, Level};
 use crate::{
     error::{AppError, Result},
     pac::Pac,
-    storage::{memory_storage::MemoryStorage, Storage},
+    storage::{sqlite_storage::SqliteStorage, Storage},
     trace_layer,
 };
 
@@ -42,12 +42,19 @@ impl<S: Storage + Debug> ServerState<S> {
     }
 }
 
-pub async fn run_web_server(bind: SocketAddr, token: Option<String>) -> Result<()> {
+pub async fn run_web_server(
+    bind: SocketAddr,
+    token: Option<String>,
+    database: Option<String>,
+) -> Result<()> {
     tracing::debug!("Starting web server");
 
     let (update_tx, rx) = mpsc::channel(1);
 
-    let storage = MemoryStorage::default();
+    let storage = match database {
+        Some(url) => SqliteStorage::new(&url).await?,
+        None => SqliteStorage::new("sqlite::memory:").await?,
+    };
     let server_state = Arc::new(ServerState::new(storage, update_tx));
 
     tokio::spawn(subscribe_pac(server_state.storage.clone(), rx));

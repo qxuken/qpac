@@ -22,13 +22,17 @@ async fn main() -> error::Result<()> {
     utils::color_eyre::setup()?;
 
     let args = Args::parse();
-    args.instrumentation.setup(&[])?;
+    args.instrumentation.setup(&["sqlx"])?;
 
     tracing::trace!("{:?}", args);
 
     match args.command {
-        args::Command::Serve { bind, token } => {
-            web::run_web_server(bind, token).await?;
+        args::Command::Serve {
+            bind,
+            token,
+            database,
+        } => {
+            web::run_web_server(bind, token, database).await?;
         }
         args::Command::Hash { token } => {
             let hash = generate_hash(token.as_bytes());

@@ -1,6 +1,7 @@
 use crate::{error::AppError, pac::Pac};
 
 pub mod memory_storage;
+pub mod sqlite_storage;
 
 pub trait Storage {
     fn all_hosts(&self) -> impl futures::Future<Output = Result<Vec<String>, AppError>>;
