@@ -23,6 +23,7 @@ impl Pac {
         }
         res.push_str("];\n");
         res.push_str(r#"var __PROXY__ = "SOCKS5 127.0.0.1:1080; SOCKS 127.0.0.1:1080; DIRECT;""#);
+        res.push('\n');
         res.push_str(JS_SCRIPT);
         res
     }

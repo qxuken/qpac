@@ -1284,6 +1284,7 @@ dependencies = [
  "futures-core",
  "http",
  "http-body",
+ "mime",
  "pin-project-lite",
  "tokio",
  "tokio-util",

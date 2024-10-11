@@ -2,7 +2,7 @@ use std::{fmt::Debug, net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{header, Response, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
@@ -16,7 +16,7 @@ use tokio::sync::{
 };
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
-use tracing::Level;
+use tracing::{info, Level};
 
 use crate::{
     error::{AppError, Result},
@@ -24,6 +24,8 @@ use crate::{
     storage::{memory_storage::MemoryStorage, Storage},
     trace_layer,
 };
+
+mod auth;
 
 #[derive(Debug)]
 struct ServerState<S>
@@ -45,7 +47,7 @@ impl<S: Storage + Debug> ServerState<S> {
     }
 }
 
-pub async fn run_web_server(bind: SocketAddr) -> Result<()> {
+pub async fn run_web_server(bind: SocketAddr, token: Option<String>) -> Result<()> {
     tracing::debug!("Starting web server");
 
     let (update_tx, rx) = mpsc::channel(1);
@@ -66,15 +68,26 @@ pub async fn run_web_server(bind: SocketAddr) -> Result<()> {
         .on_response(trace_layer::trace_layer_on_response);
     let compression = CompressionLayer::new();
 
-    let app = Router::new()
-        .route("/", get(get_pac))
+    let public = Router::new()
         .route("/list", get(get_list))
+        .route("/", get(get_pac))
+        .layer(compression);
+
+    let mut admin = Router::new()
         .route("/add", post(add_to_list))
-        .route("/remove", post(remove_from_list))
+        .route("/remove", post(remove_from_list));
+    if let Some(t) = token {
+        admin = admin.route_layer(auth::use_auth_layer(t));
+    } else {
+        info!("Auth token is missing, running unsafe");
+    }
+
+    let app = Router::new()
+        .merge(public)
+        .merge(admin)
         .fallback(fallback)
-        .with_state(server_state)
-        .layer(compression)
-        .layer(trace_layer);
+        .layer(trace_layer)
+        .with_state(server_state);
 
     let listener = tokio::net::TcpListener::bind(bind).await.unwrap();
     tracing::info!("Listening on {}", bind);
@@ -86,8 +99,13 @@ pub async fn run_web_server(bind: SocketAddr) -> Result<()> {
 }
 
 #[tracing::instrument(skip_all, ret(level = Level::TRACE))]
-async fn get_pac(server_state: State<Arc<ServerState<impl Storage>>>) -> impl IntoResponse {
-    server_state.pac.lock().await.get_file()
+async fn get_pac(
+    server_state: State<Arc<ServerState<impl Storage>>>,
+) -> Result<Response<String>, AppError> {
+    Response::builder()
+        .header(header::CONTENT_TYPE, "text/javascript")
+        .body(server_state.pac.lock().await.get_file())
+        .map_err(|e| AppError::Other(e.to_string()))
 }
 
 #[tracing::instrument(skip_all, ret(level = Level::TRACE))]
@@ -142,7 +160,7 @@ async fn subscribe_pac(
 ) -> Result<()> {
     let mut deb = debounced(ReceiverStream::new(rx), Duration::from_millis(150));
     while deb.next().await.is_some() {
-        tracing::trace!("update req recv");
+        tracing::trace!("update_tx recv");
         let hosts = storage.lock().await.all_hosts()?;
         pac.lock().await.update(hosts);
     }

@@ -55,7 +55,7 @@ impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         match self {
             AppError::PreconditionFailed(_) => {
-                (StatusCode::PRECONDITION_FAILED, self.to_string()).into_response()
+                (StatusCode::BAD_REQUEST, self.to_string()).into_response()
             }
             AppError::NotFound => (StatusCode::NOT_FOUND, self.to_string()).into_response(),
             _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()).into_response(),

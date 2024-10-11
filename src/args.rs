@@ -24,7 +24,7 @@ pub enum Command {
 
         /// Argon2 PHC or string token for auth puproses
         #[arg(short, long, env = "QPAC_TOKEN")]
-        token: String,
+        token: Option<String>,
     },
 
     /// Generate Argon2 PHC token

@@ -28,8 +28,7 @@ async fn main() -> error::Result<()> {
 
     match args.command {
         args::Command::Serve { bind, token } => {
-            trace!("{token}");
-            web::run_web_server(bind).await?;
+            web::run_web_server(bind, token).await?;
         }
         args::Command::Hash { token } => {
             let hash = generate_hash(token.as_bytes());
